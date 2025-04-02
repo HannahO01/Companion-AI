@@ -6,6 +6,7 @@
 #include "MainSingleton.h"
 #include "EnemyPool.h"
 #include "RigidBodyComponent.h"
+#include "DreamEngine/graphics/PointLight.h" 
 #include <DreamEngine/windows/settings.h>
 #include <DreamEngine/graphics/TextureManager.h>
 #include <DreamEngine/graphics/ModelDrawer.h>
@@ -46,7 +47,7 @@ Companion::~Companion()
 	MainSingleton::GetInstance()->GetPostMaster().Unsubscribe(eMessageType::CompanionFetch, this);
 	MainSingleton::GetInstance()->GetPostMaster().Unsubscribe(eMessageType::CompanionTurret, this);
 	MainSingleton::GetInstance()->GetPostMaster().Unsubscribe(eMessageType::CompanionStartIntro, this);
-	MainSingleton::GetInstance()->GetPostMaster().Unsubscribe(eMessageType::PlayerDied, this);
+	MainSingleton::GetInstance()->GetPostMaster().Unsubscribe(eMessageType::PlayerRespawned, this);
 }
 
 void Companion::Init()
@@ -60,7 +61,7 @@ void Companion::Init()
 	MainSingleton::GetInstance()->GetPostMaster().Subscribe(eMessageType::CompanionFetch, this);
 	MainSingleton::GetInstance()->GetPostMaster().Subscribe(eMessageType::CompanionTurret, this);
 	MainSingleton::GetInstance()->GetPostMaster().Subscribe(eMessageType::CompanionStartIntro, this);
-	MainSingleton::GetInstance()->GetPostMaster().Subscribe(eMessageType::PlayerDied, this);
+	MainSingleton::GetInstance()->GetPostMaster().Subscribe(eMessageType::PlayerRespawned, this);
 
 	physx::PxRigidDynamic* body = static_cast<physx::PxRigidDynamic*>(GetComponent<RigidBodyComponent>()->GetBody());
 	physx::PxTransform currentPose = body->getGlobalPose();
@@ -70,111 +71,21 @@ void Companion::Init()
 
 void Companion::Update(float aDeltaTime)
 {
-	myModelInstance = myBehavior.context.modelInstance;
+	if (MainSingleton::GetInstance()->GetGameToPause())
+		return;
+	
+	PrepareBehaviorContext();
+	
+	DreamEngine::Vector3f target = myBehavior.Update(aDeltaTime);
+	DreamEngine::Vector3f steeringForce = SetSteering(aDeltaTime, target);
+	
+	UpdateRotation(aDeltaTime, steeringForce);
+	UpdatePhysics(steeringForce);
 
-	myContext.transform = *GetTransform();
-	myContext.playerPos = myPlayer->GetTransform()->GetPosition();
-	myContext.closesHealingStation = CalculateClosesHealingStation();
-	myContext.enemyPosition = myTargetEnemyTransform.GetPosition();
-	myContext.enemyTransform = &myTargetEnemyTransform;
+	myModelInstance->SetTransform(*GetTransform());
 
-	myBehavior.SetContext(myContext);
-
-	DreamEngine::Vector3f steeringForce;
-	DreamEngine::Vector3f target = myBehavior.Update(aDeltaTime); 
-
-	if(myBehavior.GetOrder() == CompanionBehavior::Orders::FollowPlayer)
-	{
-		if(Near(myTransform.GetPosition(), target, 1000.f))
-		{
-			mySteeringBehavior->ChoseClosesBilateral(myPlayer->GetTransform()->GetPosition());
-			auto offsetPos = myPlayer->GetTransform()->GetPosition() + mySteeringBehavior->SetOffsetToPlayer(myPlayer->GetTransform()->GetPosition());
-			steeringForce = mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), offsetPos);
-		}
-		else
-		{
-			steeringForce = mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target);
-		}
-		if(steeringForce.Length() == 0.0f)
-		{
-			if(myBehavior.context.seesEnemy)
-			{
-				myTargetRotation = myTargetEnemyTransform.GetPosition() - GetTransform()->GetPosition();
-				myRotation = mySteeringBehavior->RotateToThisOverTime(myTargetRotation, aDeltaTime, 5.f, myRotation);
-			}
-			else
-			{
-				myTargetRotation = myPlayer->GetTransform()->GetPosition() - GetTransform()->GetPosition();
-				myRotation = mySteeringBehavior->RotateToThisOverTime(myTargetRotation, aDeltaTime, 5.f, myRotation);
-			}
-		}
-		else
-		{
-			if(myBehavior.context.seesEnemy)
-			{
-				myTargetRotation = myTargetEnemyTransform.GetPosition() - GetTransform()->GetPosition();
-				myRotation = mySteeringBehavior->RotateToThis(myTargetRotation);
-			}
-			else
-				myRotation = mySteeringBehavior->RotateToVelocity();
-		}
-	}
-	if(myBehavior.GetOrder() == CompanionBehavior::Orders::Turret)
-	{
-		steeringForce = mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target);
-		
-		if(steeringForce.Length() == 0.0f)
-		{
-			myTargetRotation = myTargetEnemyTransform.GetPosition() - GetTransform()->GetPosition();
-			myRotation = mySteeringBehavior->RotateToThisOverTime(myTargetRotation, aDeltaTime, 5.f, myRotation);
-		}
-		else
-			myRotation = mySteeringBehavior->RotateToVelocity();
-
-	}
-	if(myBehavior.GetOrder() == CompanionBehavior::Orders::Fetch)
-	{
-		steeringForce = mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target);
-
-		myRotation = mySteeringBehavior->RotateToVelocity();
-	}
-	if(myBehavior.GetOrder() == CompanionBehavior::Orders::Intro)
-	{
-		if(myBehavior.context.hasWokenUp)
-		{
-			steeringForce = mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target);
-
-			myTargetRotation = myPlayer->GetTransform()->GetPosition() - GetTransform()->GetPosition();
-			myRotation = mySteeringBehavior->RotateToThisOverTime(myTargetRotation, aDeltaTime, 5.f, myRotation);
-		}
-		else
-			steeringForce = 0.0f;
-	}
-
-
-	physx::PxRigidDynamic* body = static_cast<physx::PxRigidDynamic*>(GetComponent<RigidBodyComponent>()->GetBody());
-	physx::PxVec3 velocity(steeringForce.x, steeringForce.y, steeringForce.z); // Adjust the multiplier as needed
-	body->setLinearVelocity(velocity);
-
-	// Update the transform position to match the physics body
-	if(!MainSingleton::GetInstance()->GetGameToPause())
-	{
-		physx::PxRigidDynamic* body = static_cast<physx::PxRigidDynamic*>(GetComponent<RigidBodyComponent>()->GetBody());
-		physx::PxTransform currentPose = body->getGlobalPose();
-
-		if(steeringForce.Length() == 0.0f)
-		{
-			currentPose.p.y = myTransform.GetPosition().y;
-			body->setActorFlag(physx::PxActorFlag::eDISABLE_GRAVITY, true);
-		}
-		else
-			body->setActorFlag(physx::PxActorFlag::eDISABLE_GRAVITY, false);
-
-		myTransform.SetPosition(DreamEngine::Vector3f(currentPose.p.x, (currentPose.p.y), currentPose.p.z));
-		myModelInstance->SetTransform(*GetTransform());
-		myModelInstance->SetRotation(myRotation);
-		myTransform.SetRotation(myRotation);
-	}
+	UpdatePointLight();
+	
 }
 
 void Companion::Render(DE::GraphicsEngine & aGraphicsEngine)
@@ -192,20 +103,30 @@ void Companion::Receive(const Message & aMessage)
 {
 	if(aMessage.messageType == eMessageType::CompanionFetch)
 	{
+		if (myBehavior.GetOrder() != CompanionBehavior::Orders::FollowPlayer) { return; }
 		myBehavior.SetOrder(CompanionBehavior::Orders::Fetch);
 	}
 	else if(aMessage.messageType == eMessageType::CompanionTurret)
 	{
+		if (myBehavior.GetOrder() != CompanionBehavior::Orders::FollowPlayer) { return; }
 		myBehavior.SetOrder(CompanionBehavior::Orders::Turret);
 	}
 	else if(aMessage.messageType == eMessageType::CompanionStartIntro)
 	{
 		myBehavior.context.hasWokenUp = true;
 	}
-	else if(aMessage.messageType == eMessageType::PlayerRespawned)
-	{//this message is not being used atm but will fix later
-		myTransform.SetPosition(myPlayer->GetTransform()->GetPosition()); 
-		myModelInstance->SetTransform(*GetTransform());
+	else if (aMessage.messageType == eMessageType::PlayerRespawned)
+	{
+		GetTransform()->SetPosition(myPlayer->GetTransform()->GetPosition()); 
+		myModelInstance->SetTransform(*GetTransform()); 
+		
+		physx::PxRigidDynamic* body = static_cast<physx::PxRigidDynamic*>(GetComponent<RigidBodyComponent>()->GetBody());
+		physx::PxTransform currentPose = body->getGlobalPose();
+		physx::PxTransform updatedPose(physx::PxVec3(myTransform.GetPosition().x, myTransform.GetPosition().y, myTransform.GetPosition().z), currentPose.q);
+		body->setGlobalPose(updatedPose);
+
+		MainSingleton::GetInstance()->GetAudioManager().StopAudio(eAudioEvent::CompanionRevive);
+		MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionRevive, myTransform.GetPosition());
 	}
 }
 
@@ -217,6 +138,12 @@ void Companion::SetPlayer(std::shared_ptr<Player> aPlayer)
 void Companion::SetModelInstance(std::shared_ptr<DreamEngine::ModelInstance>& aModelInstance)
 {
 	myModelInstance = aModelInstance;
+}
+
+void Companion::SetPointLight(std::shared_ptr<DE::PointLight> aPointLightAbove, std::shared_ptr<DE::PointLight> aPointLightInside)
+{
+	myPointLightAbove = aPointLightAbove;
+	myPointLightInside = aPointLightInside;
 }
 
 void Companion::SetTargetedEnemyPos(std::vector<std::shared_ptr<FlyingEnemy>> aEnemyFlyingPos, std::vector<std::shared_ptr<GroundEnemy>> aEnemyGroundPos)
@@ -278,7 +205,7 @@ DreamEngine::Vector3f Companion::CalculateClosesHealingStation()
 
 	for(int i = 0; i < myHealingStationPos.size(); i++)
 	{
-		float dist = (myHealingStationPos[i] - GetTransform()->GetPosition()).Length();
+		float dist = (myHealingStationPos[i], GetTransform()->GetPosition()).Length();
 		if(shortesDist == 0 || shortesDist > dist)
 		{
 			shortesDist = dist;
@@ -297,4 +224,135 @@ bool Companion::Near(DreamEngine::Vector3f aPos, DreamEngine::Vector3f aTargetPo
 		return true;
 	}
 	return false;
+}
+
+void Companion::PrepareBehaviorContext()
+{
+	myModelInstance = myBehavior.context.modelInstance;
+
+	myContext.transform = *GetTransform();
+	myContext.playerPos = myPlayer->GetTransform()->GetPosition();
+	myContext.closesHealingStation = CalculateClosesHealingStation();
+	myContext.enemyPosition = myTargetEnemyTransform.GetPosition();
+	myContext.enemyTransform = &myTargetEnemyTransform;
+
+	myBehavior.SetContext(myContext);
+}
+
+DreamEngine::Vector3f Companion::SetSteering(float aDeltaTime, const DreamEngine::Vector3f& target)
+{
+	switch (myBehavior.GetOrder())
+	{
+	case CompanionBehavior::Orders::Fetch:
+	case CompanionBehavior::Orders::Turret:
+		return mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target);
+
+	case CompanionBehavior::Orders::FollowPlayer:
+		return SetFollowPlayerSteering(aDeltaTime, target);
+
+	case CompanionBehavior::Orders::Intro:
+		return myBehavior.context.hasWokenUp
+			? mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target)
+			: DreamEngine::Vector3f(0.0f);
+
+	default:
+		return DreamEngine::Vector3f(0.0f);
+	}
+}
+
+DreamEngine::Vector3f Companion::SetFollowPlayerSteering(float aDeltaTime, const DreamEngine::Vector3f& target)
+{
+	if (Near(myTransform.GetPosition(), target, 1000.f))
+	{
+		mySteeringBehavior->ChoseClosesBilateral(myPlayer->GetTransform()->GetPosition());
+
+		auto offsetPos = myPlayer->GetTransform()->GetPosition() +
+			mySteeringBehavior->SetOffsetToPlayer(myPlayer->GetTransform()->GetPosition());
+
+		return mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), offsetPos);
+	}
+	return mySteeringBehavior->Update(aDeltaTime, myTransform.GetPosition(), target);
+}
+
+void Companion::UpdatePointLight()
+{
+	switch (myBehavior.GetOrder())
+	{
+	case CompanionBehavior::Orders::Fetch: 
+		myPointLightInside->SetColor({ 176.0f / 255.0f, 250.0f / 255.0f, 155.0f / 255.0f });
+		break;
+	case CompanionBehavior::Orders::Turret:
+		myPointLightInside->SetColor({ 250.0f / 255.0f ,155.0f / 255.0f ,155.0f / 255.0f });
+		break;
+	case CompanionBehavior::Orders::FollowPlayer:
+		myPointLightInside->SetColor({ 250.0f / 255.0f ,191.0f / 255.0f ,155.0f / 255.0f });
+		myPointLightAbove->SetColor({ 1.0f,1.0f,1.0f });
+		break;
+	case CompanionBehavior::Orders::Intro:
+		return;
+	}
+
+	DE::Vector3f pos = GetTransform()->GetPosition();
+
+	myPointLightInside->SetPosition(pos);
+	myPointLightInside->myObjPtr->SetLocation(pos);
+
+	pos += GetTransform()->GetMatrix().GetForward().GetNormalized() * 100.0f;
+	pos += GetTransform()->GetMatrix().GetUp().GetNormalized() * 50.0f;
+
+	myPointLightAbove->SetPosition(pos);
+	myPointLightAbove->myObjPtr->SetLocation(pos);
+}
+
+void Companion::UpdateRotation(float aDeltaTime, const DreamEngine::Vector3f& steeringForce)
+{
+	if (steeringForce.Length() == 0.0f)
+		HandleStationaryRotation(aDeltaTime);
+	else
+		HandleMovingRotation();
+
+	myModelInstance->SetRotation(myRotation);
+	myTransform.SetRotation(myRotation);
+}
+
+void Companion::HandleStationaryRotation(float aDeltaTime)
+{
+	myTargetRotation = myBehavior.context.seesEnemy
+		? myTargetEnemyTransform.GetPosition() - GetTransform()->GetPosition()
+		: myPlayer->GetTransform()->GetPosition() - GetTransform()->GetPosition();
+
+	myRotation = mySteeringBehavior->RotateToThisOverTime(myTargetRotation, aDeltaTime, 5.f, myRotation);
+}
+
+void Companion::HandleMovingRotation()
+{
+	if (myBehavior.context.seesEnemy)
+	{
+		myTargetRotation = myTargetEnemyTransform.GetPosition() - GetTransform()->GetPosition();
+		myRotation = mySteeringBehavior->RotateToThis(myTargetRotation);
+	}
+	else
+		myRotation = mySteeringBehavior->RotateToVelocity();
+}
+
+void Companion::UpdatePhysics(const DreamEngine::Vector3f& steeringForce)
+{
+	physx::PxRigidDynamic* body = static_cast<physx::PxRigidDynamic*>(GetComponent<RigidBodyComponent>()->GetBody());
+
+	// Set velocity
+	physx::PxVec3 velocity(steeringForce.x, steeringForce.y, steeringForce.z);
+	body->setLinearVelocity(velocity);
+
+	// Update position and handle gravity
+	physx::PxTransform currentPose = body->getGlobalPose();
+
+	if (steeringForce.Length() == 0.0f)
+	{
+		currentPose.p.y = myTransform.GetPosition().y;
+		body->setActorFlag(physx::PxActorFlag::eDISABLE_GRAVITY, true);
+	}
+	else
+		body->setActorFlag(physx::PxActorFlag::eDISABLE_GRAVITY, false);
+
+	myTransform.SetPosition(DreamEngine::Vector3f(currentPose.p.x, currentPose.p.y, currentPose.p.z));
 }

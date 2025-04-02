@@ -31,28 +31,28 @@ CompanionBehavior::CompanionBehavior()
 	myBehaviourTree = std::make_shared<BehaviourTree>(
 		Builder()
 		.Composites<Selector>()
-			.Composites<HaveNoOrder>(this)
-				.Leaf<Intro>(this)
-				.Composites<FollowPlayer>(this)
-					.Leaf<ShootEnemy>(this)
-				.End()		// Close FollowPlayer
-			.End()			// Close HaveNoOrder
+		.Composites<HaveNoOrder>(this)
+		.Leaf<Intro>(this)
+		.Composites<FollowPlayer>(this)
+		.Leaf<ShootEnemy>(this)
+		.End()						//Close FollowPlayer
+		.End()						//Close HaveNoOrder
 
-			.Composites<HaveOrder>(this)
-				.Composites<Fetch>(this)
-					.Composites<PickUp>(this)
-					.End() // close pickup
-					.Composites<DropOff>(this)
-					.End()	// close Drop off
-				.End()		//close fetch
+		.Composites<HaveOrder>(this)
+		.Composites<Fetch>(this)
+		.Composites<PickUp>(this)
+		.End()						//Close pickup
+		.Composites<DropOff>(this)
+		.End()						//Close Drop off
+		.End()						//Close fetch
 
-				.Composites<Turret>(this)
-					.Leaf<ShootEnemy>(this)
-				.End()		// close turret
+		.Composites<Turret>(this)
+		.Leaf<ShootEnemy>(this)
+		.End()						//Close turret
 
-			.End()			// close have order
-		.End()				//close root
-	.Build() 
+		.End()						//Close have order
+		.End()						//Close root
+		.Build()
 	);
 }
 
@@ -65,9 +65,10 @@ void CompanionBehavior::Init(std::shared_ptr<DreamEngine::ModelInstance> aModel)
 	InitAudio();
 
 	context.modelInstance = aModel;
-	context.turretTimer.SetThresholdValue(turretDuration); 
+
+	context.turretTimer.SetThresholdValue(turretDuration);
 	context.turretCooldown.SetThresholdValue(turretCooldown);
-	context.shootTimer.SetThresholdValue(shootCooldown); 
+	context.shootTimer.SetThresholdValue(shootCooldown);
 	context.healCooldown.SetThresholdValue(HealCooldown);
 	context.conversationTimer.SetThresholdValue(conversationInterval);
 
@@ -75,9 +76,13 @@ void CompanionBehavior::Init(std::shared_ptr<DreamEngine::ModelInstance> aModel)
 	context.noShooting = false;
 
 	context.modelInstanceHealthPack = std::make_shared<DreamEngine::ModelInstance>(
-		DreamEngine::ModelFactory::GetInstance().GetModelInstance(L"3D/SM_P_Healthpack.fbx"));	
+		DreamEngine::ModelFactory::GetInstance().GetModelInstance(L"3D/SM_P_Healthpack.fbx"));
 
 	context.projectilePool = new ProjectilePool(1, false);
+
+	bool activationMessageData = false;
+	MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &activationMessageData, eMessageType::CompanionHealthCooldownToggle });
+	MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &activationMessageData, eMessageType::CompanionTurretCooldownToggle });
 }
 
 DreamEngine::Vector3f CompanionBehavior::Update(float aDeltaTime)
@@ -90,32 +95,29 @@ DreamEngine::Vector3f CompanionBehavior::Update(float aDeltaTime)
 	context.healCooldown.Update(aDeltaTime);
 	context.conversationTimer.Update(aDeltaTime);
 
-	if(context.projectilePool)
+	if (context.projectilePool)
 		context.projectilePool->Update(aDeltaTime);
-	
+
 	SetTexture();
 
-
-	if(MainSingleton::GetInstance()->GetInputManager().IsKeyDown(DreamEngine::eKeyCode::H))
-	{
+	if (MainSingleton::GetInstance()->GetInputManager().IsKeyDown(DreamEngine::eKeyCode::H))
 		context.noShooting = !context.noShooting;
-	}
 
-	if(context.turretCooldown.ReachedThreshold() && !context.hasSentCoolDownMSG)
+	if (context.turretCooldown.ReachedThreshold() && !context.hasSentCoolDownMSG)
 	{
 		bool activationMessageData = true;
 		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &activationMessageData, eMessageType::CompanionTurretCooldownToggle });
 
 		context.hasSentCoolDownMSG = true;
 	}
-	if(context.healCooldown.ReachedThreshold() && context.hasHealingCoolDown)
+	if (context.healCooldown.ReachedThreshold() && context.hasHealingCoolDown)
 	{
 		bool activationMessageData = true;
 		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &activationMessageData, eMessageType::CompanionHealthCooldownToggle });
 
 		context.hasHealingCoolDown = false;
-	}	
-	if(context.conversationTimer.ReachedThreshold())
+	}
+	if (context.conversationTimer.ReachedThreshold())
 	{
 		PlayRandomSound();
 		context.conversationTimer.Reset();
@@ -126,10 +128,10 @@ DreamEngine::Vector3f CompanionBehavior::Update(float aDeltaTime)
 
 void CompanionBehavior::Render(DE::GraphicsEngine& aGraphicsEngine)
 {
-	if(context.hasPickedUp)
+	if (context.hasPickedUp)
 		aGraphicsEngine.GetModelDrawer().DrawGBCalc(*context.modelInstanceHealthPack.get());
 
-	if(context.projectilePool)
+	if (context.projectilePool)
 		context.projectilePool->Render(aGraphicsEngine);
 }
 
@@ -173,10 +175,10 @@ void CompanionBehavior::InitAudio()
 
 void CompanionBehavior::PlayRandomSound()
 {
-	int soundNr = GetRandomInt(0, (int)myAudios.size() - 1); 
+	int soundNr = GetRandomInt(0, (int)myAudios.size() - 1);
 
 	MainSingleton::GetInstance()->GetAudioManager().StopAudio(myAudios[soundNr]);
-	MainSingleton::GetInstance()->GetAudioManager().PlayAudio(myAudios[soundNr]);
+	MainSingleton::GetInstance()->GetAudioManager().PlayAudio(myAudios[soundNr], context.transform.GetPosition());
 }
 
 void CompanionBehavior::SetTexture()
@@ -186,7 +188,7 @@ void CompanionBehavior::SetTexture()
 	std::wstring nameM;
 	std::wstring nameFX;
 
-	switch(GetOrder())
+	switch (GetOrder())
 	{
 	case CompanionBehavior::Orders::Fetch:
 	{
@@ -217,45 +219,45 @@ void CompanionBehavior::SetTexture()
 		break;
 	}
 	default:
-	break;
+		break;
 	}
 }
 
-void CompanionBehavior::Texture(const wchar_t* aColorPath, const wchar_t* aNormalPath, const wchar_t* aMaterialPath, const wchar_t* aEmessivePath)
+void CompanionBehavior::Texture(const wchar_t* aColorPath, const wchar_t* aNormalPath, const wchar_t* aMaterialPath, const wchar_t* aEmissivePath)
 {
 	DreamEngine::Engine& engine = *DreamEngine::Engine::GetInstance();
-	DreamEngine::Texture* textureC = nullptr;
-	DreamEngine::Texture* textureN = nullptr;
-	DreamEngine::Texture* textureM = nullptr;
+	DreamEngine::Texture* textureC  = nullptr;
+	DreamEngine::Texture* textureN  = nullptr;
+	DreamEngine::Texture* textureM  = nullptr;
 	DreamEngine::Texture* textureFX = nullptr;
 
-	textureC = engine.GetTextureManager().GetTexture(aColorPath, true);
-	textureN = engine.GetTextureManager().GetTexture(aNormalPath, false);
-	textureM = engine.GetTextureManager().GetTexture(aMaterialPath, false);
-	textureFX = engine.GetTextureManager().GetTexture(aEmessivePath, false);
+	textureC  = engine.GetTextureManager().GetTexture(aColorPath, true);
+	textureN  = engine.GetTextureManager().GetTexture(aNormalPath, false);
+	textureM  = engine.GetTextureManager().GetTexture(aMaterialPath, false);
+	textureFX = engine.GetTextureManager().GetTexture(aEmissivePath, false);
 
-	for(size_t i = 0; i < context.modelInstance->GetModel()->GetMeshCount(); i++)
+	for (size_t i = 0; i < context.modelInstance->GetModel()->GetMeshCount(); i++)
 	{
 		context.modelInstance->SetTexture(i, 0, textureC);	// 0 = Colour
-		context.modelInstance->SetTexture(i, 1, textureN); // 1 = normal
-		context.modelInstance->SetTexture(i, 2, textureM); // 2 = material
-		context.modelInstance->SetTexture(i, 3, textureFX); // 3 = FX 
+		context.modelInstance->SetTexture(i, 1, textureN);	// 1 = Normal
+		context.modelInstance->SetTexture(i, 2, textureM);	// 2 = Material
+		context.modelInstance->SetTexture(i, 3, textureFX); // 3 = FX Emissive 
 	}
 }
 
 Node::Status HaveNoOrder::Update()
 {
 	//when no succsed
-	if(myController->GetOrder() == CompanionBehavior::Orders::Fetch ||
-	   myController->GetOrder() == CompanionBehavior::Orders::Turret)
+	if (myController->GetOrder() == CompanionBehavior::Orders::Fetch ||
+		myController->GetOrder() == CompanionBehavior::Orders::Turret)
 		return Status::Failure;
 
 	bool running = false;
 
-	for(size_t i = 0; i < myChildren.size(); i++)
+	for (size_t i = 0; i < myChildren.size(); i++)
 	{
 		myChildren[i]->Update();
-		if(myChildren[i]->CheckStatus(Status::Running))
+		if (myChildren[i]->CheckStatus(Status::Running))
 		{
 			running = true;
 		}
@@ -266,13 +268,13 @@ Node::Status HaveNoOrder::Update()
 
 Node::Status HaveOrder::Update()
 {
-	if (myController->GetOrder() == CompanionBehavior::Orders::Turret) 
+	if (myController->GetOrder() == CompanionBehavior::Orders::Turret)
 	{
-		myChildren[1]->Update(); 
+		myChildren[1]->Update();
 	}
-	else if(myController->GetOrder() == CompanionBehavior::Orders::Fetch)
+	else if (myController->GetOrder() == CompanionBehavior::Orders::Fetch)
 	{
-		myChildren[0]->Update(); 
+		myChildren[0]->Update();
 	}
 
 	return myController->GetOrder() == CompanionBehavior::Orders::FollowPlayer ? Status::Failure : Status::Success;
@@ -280,10 +282,10 @@ Node::Status HaveOrder::Update()
 
 Node::Status FollowPlayer::Update()
 {
-	if(myController->GetOrder() != CompanionBehavior::Orders::FollowPlayer)
+	if (myController->GetOrder() != CompanionBehavior::Orders::FollowPlayer)
 		return Status::Failure;
 
-	for(size_t i = 0; i < myChildren.size(); i++)
+	for (size_t i = 0; i < myChildren.size(); i++)
 	{
 		myChildren[i]->Update();
 	}
@@ -296,7 +298,7 @@ Node::Status FollowPlayer::Update()
 
 Node::Status Fetch::Update()
 {
-	if(!myController->context.hasPickedUp)
+	if (!myController->context.hasPickedUp)
 	{
 		myChildren[0]->Update();
 		return Status::Running;
@@ -312,13 +314,13 @@ Node::Status Fetch::Update()
 
 Node::Status Turret::Update()
 {
-	if(!myController->context.turretCooldown.ReachedThreshold())	//on cooldown
+	if (!myController->context.turretCooldown.ReachedThreshold())	//on cooldown
 	{
 		myController->SetOrder(CompanionBehavior::Orders::FollowPlayer);
 		return Status::Failure;
 	}
 
-	if(myController->context.turretPosition.Length() == 0)
+	if (myController->context.turretPosition.Length() == 0)
 	{
 		myController->context.turretPosition = myController->context.playerPos;
 		myController->context.turretPosition.y += myController->context.rayLength;
@@ -328,16 +330,15 @@ Node::Status Turret::Update()
 		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &activationMessageData, eMessageType::CompanionTurretActive });
 
 		MainSingleton::GetInstance()->GetAudioManager().StopAudio(eAudioEvent::CompanionVL1);
-		MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionVL1);
+		MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionVL1, myController->context.transform.GetPosition());
 
-		//sending message to HUD
+		//sending message to HUD & projectile
 		bool deactivationMessageData = false;
-		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({&deactivationMessageData, eMessageType::CompanionTurretCooldownToggle});
-		//sending message to projectile
-		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({&deactivationMessageData, eMessageType::CompanionTurretActive});
+		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &deactivationMessageData, eMessageType::CompanionTurretCooldownToggle });
+		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &deactivationMessageData, eMessageType::CompanionTurretActive });
 	}
 
-	if(myController->context.turretTimer.ReachedThreshold())	//is done
+	if (myController->context.turretTimer.ReachedThreshold())	//is done
 	{
 		myController->SetOrder(CompanionBehavior::Orders::FollowPlayer);
 
@@ -357,6 +358,15 @@ Node::Status Turret::Update()
 
 Node::Status PickUp::Update()
 {
+	if (!myController->context.healCooldown.ReachedThreshold()) 
+	{ 
+		myController->SetOrder(CompanionBehavior::Orders::FollowPlayer);
+		return Status::Failure;
+	}
+
+	bool deactivationMessageData = false;
+	MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &deactivationMessageData, eMessageType::CompanionHealthCooldownToggle });
+
 	DreamEngine::Vector3f Hpos = myController->context.closesHealingStation;
 	Hpos.y += myController->context.rayLength;
 
@@ -364,9 +374,10 @@ Node::Status PickUp::Update()
 	DreamEngine::Vector3f target = Hpos - Cpos;
 
 	float dist = (target).Length();
-	if(dist < PickupDistance)
+	if (dist < PickupDistance)
 	{
 		myController->context.hasPickedUp = true;
+		myController->context.modelInstanceHealthPack->SetTransform(myController->context.transform);
 		return Status::Success;
 	}
 
@@ -379,34 +390,33 @@ Node::Status DropOff::Update()
 {
 	DreamEngine::Vector3f Ppos = myController->context.playerPos;
 	Ppos.y += myController->context.rayLength;
+
 	DreamEngine::Vector3f Cpos = myController->context.transform.GetPosition();
 	DreamEngine::Vector3f target = Ppos - Cpos;
 	float dist = (target).Length();
 
-	// updating health pack transform //
+	// updating health pack transform
 	auto transformH = myController->context.transform;
 	DE::Vector3f posH = transformH.GetPosition();
 	posH.y -= healtPackOffset;
+
 	transformH.SetPosition(posH);
 	myController->context.modelInstanceHealthPack->SetTransform(transformH);
 
-	if(dist < DropDistance)
+	if (dist < DropDistance)
 	{
 		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ nullptr, eMessageType::PlayerTriggerHeal });
 
-		bool deactivationMessageData = false;
-		MainSingleton::GetInstance()->GetPostMaster().TriggerMessage({ &deactivationMessageData, eMessageType::CompanionHealthCooldownToggle });
-
 		myController->context.everyOtherHealing = !myController->context.everyOtherHealing;
-		if(myController->context.everyOtherHealing) 
+		if (myController->context.everyOtherHealing)
 		{
 			MainSingleton::GetInstance()->GetAudioManager().StopAudio(eAudioEvent::CompanionHealing1);
-			MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionHealing1);
+			MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionHealing1, myController->context.transform.GetPosition());
 		}
 		else
 		{
 			MainSingleton::GetInstance()->GetAudioManager().StopAudio(eAudioEvent::CompanionHealing2);
-			MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionHealing2);
+			MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionHealing2, myController->context.transform.GetPosition());
 		}
 
 		myController->context.hasHealingCoolDown = true;
@@ -425,13 +435,13 @@ Node::Status DropOff::Update()
 
 Node::Status ShootEnemy::Update()
 {
-	if(!myController->context.shootTimer.ReachedThreshold() || 
-	   myController->context.noShooting == true ||
-	   !myController->context.seesEnemy)
+	if (!myController->context.shootTimer.ReachedThreshold() ||
+		myController->context.noShooting == true ||
+		!myController->context.seesEnemy)
 		return Status::Running;
 
 	myController->context.shootTimer.Reset();
-	
+
 	DE::Vector3f enemyPosition = myController->context.enemyPosition;
 	DE::Vector3f companionPosition = myController->context.transform.GetPosition();
 	DE::Vector3f dirToEnemy = DE::Vector3f(enemyPosition - companionPosition);
@@ -440,28 +450,28 @@ Node::Status ShootEnemy::Update()
 		companionPosition, dirToEnemy.GetNormalized(), myController->context.enemyTransform);
 
 	MainSingleton::GetInstance()->GetAudioManager().StopAudio(eAudioEvent::CompanionShoot);
-	MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionShoot);
+	MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionShoot, myController->context.transform.GetPosition());
 
 	return Status::Success;
 }
 
 Node::Status Intro::Update()
 {
-	if(myController->GetOrder() == CompanionBehavior::Orders::FollowPlayer || !myController->context.hasWokenUp)	// add this when thea is finished with cam movement!
+	if (myController->GetOrder() == CompanionBehavior::Orders::FollowPlayer || !myController->context.hasWokenUp)	// add this when thea is finished with cam movement!
 		return Status::Failure;
 
-	if(myController->context.introPosition.Length() == 0.0f)
+	if (myController->context.introPosition.Length() == 0.0f)
 	{
 		DE::Vector3f pos = myController->context.transform.GetPosition();
 		pos.y += introHeightOffset;
 		myController->context.introPosition = pos;
 
 		MainSingleton::GetInstance()->GetAudioManager().StopAudio(eAudioEvent::CompanionIntroduction);
-		MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionIntroduction);
+		MainSingleton::GetInstance()->GetAudioManager().PlayAudio(eAudioEvent::CompanionIntroduction, myController->context.transform.GetPosition());
 	}
 
 	float lenght = (myController->context.introPosition - myController->context.transform.GetPosition()).Length();
-	if(lenght < introCompletionDistance && lenght != 0.0f)
+	if (lenght < introCompletionDistance && lenght != 0.0f)
 	{
 		myController->SetOrder(CompanionBehavior::Orders::FollowPlayer);
 		return Status::Success;

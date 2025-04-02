@@ -5,42 +5,6 @@
 #include <DreamEngine/utilities/CountTimer.h>
 #include <DreamEngine/graphics/ModelInstance.h>
 
-struct CompanionMovementRead
-{ // Read only
-	DreamEngine::Transform transform;
-	DreamEngine::Vector3f playerPosition;
-	DreamEngine::Vector3f healingStationPosition;
-	DreamEngine::Vector3f targetedEnemyPosition;
-};
-
-struct CompanionMovementContext
-{
-	CU::CountupTimer directionCooldown;
-
-	DreamEngine::Transform transform;
-	DreamEngine::Vector3f offset;
-	DreamEngine::Vector3f targetPosition;
-	DreamEngine::Vector3f playerPos;
-	DreamEngine::Vector3f closesHealingStation;
-	DreamEngine::Vector3f enemyPosition;
-	DreamEngine::Vector3f turretPosition = {0.0f,0.0f,0.0f};
-	DreamEngine::Vector3f velocity = {0.0f,0.0f,0.0f};
-	DreamEngine::Vector3f lastTargetPos = {0.0f,0.0f,0.0f};
-
-	float deltaTime;
-	float maxVelocity;
-	float maxForce;
-	float rayLength;
-	float maxSpeed;
-	float speed;
-	float mass;
-	float dotProduct;
-
-	bool hasPickedUp;
-	bool approaching;
-	bool colliding;
-};
-
 class ProjectilePool;
 struct CompanionContext
 {
@@ -68,8 +32,8 @@ struct CompanionContext
 	bool hasPickedUp;
 	bool noShooting = true;
 	bool seesEnemy = false;
-	bool hasSentCoolDownMSG = true;
-	bool hasHealingCoolDown = false;
+	bool hasSentCoolDownMSG = false;
+	bool hasHealingCoolDown = true;
 	bool hasWokenUp = false;
 	bool everyOtherHealing = false;
 

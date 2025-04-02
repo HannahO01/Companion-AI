@@ -34,21 +34,33 @@ public:
 
 	void SetPlayer(std::shared_ptr<Player> aPlayer);
 	void SetModelInstance(std::shared_ptr<DreamEngine::ModelInstance>& aModelInstance);
-		
+	void SetPointLight(std::shared_ptr<DE::PointLight> aPointLightAbove, std::shared_ptr<DE::PointLight> aPointLightInside);
 	void SetTargetedEnemyPos(std::vector<std::shared_ptr<FlyingEnemy>> aEnemyFlyingPos, std::vector<std::shared_ptr<GroundEnemy>> aEnemyGroundPos);
 
 	void AddHealingStationPos(DreamEngine::Vector3f aHealingStationPos);
 	DreamEngine::Vector3f CalculateClosesHealingStation(); 
 	bool Near(DreamEngine::Vector3f aPos, DreamEngine::Vector3f aTargetPos, float aLenght);
 
+	void PrepareBehaviorContext();
+
+	DreamEngine::Vector3f SetSteering(float aDeltaTime, const DreamEngine::Vector3f& target);
+	DreamEngine::Vector3f SetFollowPlayerSteering(float aDeltaTime, const DreamEngine::Vector3f& target); 
+
+	void UpdatePointLight();
+	void UpdateRotation(float aDeltaTime, const DreamEngine::Vector3f& steeringForce);
+	void UpdatePhysics(const DreamEngine::Vector3f& steeringForce);
+	void HandleStationaryRotation(float aDeltaTime);
+	void HandleMovingRotation();
+
 private:
 	CompanionBehavior myBehavior; 
 	CompanionSteeringBehavior* mySteeringBehavior;
 	std::shared_ptr<DreamEngine::ModelInstance> myModelInstance; 
 	std::shared_ptr<Player> myPlayer;
+	std::shared_ptr<DreamEngine::PointLight> myPointLightAbove; 
+	std::shared_ptr<DreamEngine::PointLight> myPointLightInside;
 	std::vector<DreamEngine::Vector3f> myHealingStationPos;
 
-	CompanionMovementRead myReadState;  // Read-only state
 	CompanionContext myContext;
 
 	DreamEngine::Vector3f myRotation;

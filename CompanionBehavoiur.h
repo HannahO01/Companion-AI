@@ -33,10 +33,10 @@ public:
 	void PlayRandomSound();
 
 	void SetTexture();
-	void Texture(const wchar_t* aColorPath, 
-				 const wchar_t* aNormalPath, 
-				 const wchar_t* aMaterialPath, 
-				 const wchar_t* aEmessivePath);
+	void Texture(const wchar_t* aColorPath,
+		const wchar_t* aNormalPath,
+		const wchar_t* aMaterialPath,
+		const wchar_t* aEmessivePath);
 
 	int GetRandomInt(int min, int max)
 	{

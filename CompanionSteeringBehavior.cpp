@@ -15,38 +15,38 @@
 namespace
 {
 	// Constants
-	constexpr float minDistance = 25.0f; 
-	constexpr float extraFleeLength = 400.f; 
-	constexpr float roatationUpOffset = 0.011f; 
-	constexpr float sideOffset = 150.f; 
-	constexpr float forwardOffset = 300.f; 
+	constexpr float minDistance = 25.0f;
+	constexpr float extraFleeLength = 400.f;
+	constexpr float roatationUpOffset = 0.011f;
+	constexpr float sideOffset = 150.f;
+	constexpr float forwardOffset = 300.f;
 }
 
 CompanionSteeringBehavior::CompanionSteeringBehavior()
 {
 	myRayLength = 200.f;
 	myClosestCollision = 2000.0f;
-    myMaxSpeed = 2000.f;
-    myVelocity = 0.0f;
+	myMaxSpeed = 2000.f;
+	myVelocity = 0.0f;
 	mySlowingRadius = 1000.0f;
-    mySeekWeight = 0.0f;
-    myFleeWeight = 0.0f;
+	mySeekWeight = 0.0f;
+	myFleeWeight = 0.0f;
 	myArivalWeight = 0.0f;
 }
 
 void CompanionSteeringBehavior::Init(DreamEngine::Transform aTransform)
 {
-    myTransform = aTransform;
+	myTransform = aTransform;
 }
 
 DE::Vector3f CompanionSteeringBehavior::Update(float aDeltaTime, DE::Transform aTransform, DE::Vector3f aTarget)
 {
 	auto lenght = (aTarget - aTransform.GetPosition()).Length();
-	if(lenght <= minDistance)
+	if (lenght <= minDistance)
 		return 0.0f;
 
-    myTransform = aTransform;
-    myTarget = aTarget;
+	myTransform = aTransform;
+	myTarget = aTarget;
 
 	CalculateWeights();
 
@@ -66,7 +66,7 @@ DE::Vector3f CompanionSteeringBehavior::ArrivalForce(const DreamEngine::Vector3f
 	auto desiredVelocity = aDirection - myTransform.GetPosition();
 	float distance = (desiredVelocity).Length();
 
-	if(distance < mySlowingRadius)
+	if (distance < mySlowingRadius)
 	{
 		float scale = (distance / mySlowingRadius);
 		desiredVelocity = desiredVelocity.GetNormalized() * (myMaxSpeed * scale);
@@ -91,20 +91,20 @@ DE::Vector3f CompanionSteeringBehavior::FleeForce()
 	std::vector<eRayDir> collisionDirections = DirectionAvoidance();
 	DreamEngine::Vector3f fleeDirection;
 
-	for(eRayDir dir : collisionDirections)
+	for (eRayDir dir : collisionDirections)
 	{
-		if(dir != eRayDir::count)
+		if (dir != eRayDir::count)
 		{
 			auto matrix = myTransform.GetMatrix();
 
-			switch(dir)
+			switch (dir)
 			{
 			case eRayDir::Forward:
 			{
 				DE::Vector3f directionR = (matrix.GetForward() + matrix.GetRight()).GetNormalized();
 				DE::Vector3f directionL = (matrix.GetForward() + matrix.GetRight() * -1.0f).GetNormalized();
 
-				if(CollisionCheck(myTransform.GetPosition(), directionR, extraFleeLength) && CollisionCheck(myTransform.GetPosition(), directionL, extraFleeLength) && myClosestCollision < 70.f)
+				if (CollisionCheck(myTransform.GetPosition(), directionR, extraFleeLength) && CollisionCheck(myTransform.GetPosition(), directionL, extraFleeLength) && myClosestCollision < 70.f)
 				{
 					fleeDirection = matrix.GetForward() * -1.0f;
 					fleeDirection = matrix.GetUp();
@@ -112,36 +112,40 @@ DE::Vector3f CompanionSteeringBehavior::FleeForce()
 				}
 				else
 				{
-					if(CollisionCheck(myTransform.GetPosition(), directionR, extraFleeLength))	//checking a bit futher away 
+					if (CollisionCheck(myTransform.GetPosition(), directionR, extraFleeLength))	//checking a bit futher away 
 					{
 						fleeDirection = matrix.GetRight() * -1.0f;
 						fleeDirection += matrix.GetForward() * -1.0f;
+						fleeDirection += matrix.GetUp();
 						break;
 					}
-					if(CollisionCheck(myTransform.GetPosition(), directionL, extraFleeLength))
+					if (CollisionCheck(myTransform.GetPosition(), directionL, extraFleeLength))
 					{
 						fleeDirection += matrix.GetRight();
 						fleeDirection += matrix.GetForward() * -1.0f;
+						fleeDirection += matrix.GetUp();
 						break;
 					}
 				}
 				break;
 			}
 			case eRayDir::Back:
-			fleeDirection += matrix.GetForward();
-			break;
+				fleeDirection = matrix.GetForward();
+				fleeDirection += matrix.GetUp();
+				fleeDirection += matrix.GetRight(); 
+				break;
 			case eRayDir::Up:
-			fleeDirection += matrix.GetUp() * -1.0f;
-			break;
+				fleeDirection += matrix.GetUp() * -1.0f;
+				break;
 			case eRayDir::Down:
-			fleeDirection += matrix.GetUp();
-			break;
+				fleeDirection += matrix.GetUp();
+				break;
 			case eRayDir::Right:
-			fleeDirection += matrix.GetRight() * -1.0f;
-			break;
+				fleeDirection += matrix.GetRight() * -1.0f;
+				break;
 			case eRayDir::Left:
-			fleeDirection += matrix.GetRight();
-			break;
+				fleeDirection += matrix.GetRight();
+				break;
 			}
 		}
 		else
@@ -158,21 +162,21 @@ DE::Vector3f CompanionSteeringBehavior::FleeForce()
 
 bool CompanionSteeringBehavior::CollisionCheck(const DreamEngine::Vector3f aPosition, const DreamEngine::Vector3f aDirection, float anAdditionalLength)
 {
-	physx::PxVec3 origin = physx::PxVec3(aPosition.x, aPosition.y, aPosition.z); 
-	physx::PxVec3 direction = physx::PxVec3(aDirection.x, aDirection.y, aDirection.z); 
+	physx::PxVec3 origin = physx::PxVec3(aPosition.x, aPosition.y, aPosition.z);
+	physx::PxVec3 direction = physx::PxVec3(aDirection.x, aDirection.y, aDirection.z);
 
 	auto collisionFiltering = MainSingleton::GetInstance()->GetCollisionFiltering();
 	physx::PxQueryFilterData queryFilterData;
 	queryFilterData.data.word0 = collisionFiltering.Environment;
 
 	physx::PxRaycastBufferN<64> hitInfo;
-	if(MainSingleton::GetInstance()->GetPhysXScene()->raycast(
+	if (MainSingleton::GetInstance()->GetPhysXScene()->raycast(
 		origin, direction, (myRayLength + anAdditionalLength), hitInfo, physx::PxHitFlag::eDEFAULT, queryFilterData))
 	{
-		for(physx::PxU32 j = 0; j < hitInfo.nbTouches; ++j)
+		for (physx::PxU32 j = 0; j < hitInfo.nbTouches; ++j)
 		{
 			const physx::PxRaycastHit& hit = hitInfo.touches[j];
-			if(hit.actor->getName(), "Companion" == 0) continue; // Ignore own body
+			if (hit.actor->getName(), "Companion" == 0) continue; // Ignore own body
 			myCollisionDist = hit.distance;
 
 			return true;
@@ -195,35 +199,35 @@ std::vector<eRayDir> CompanionSteeringBehavior::DirectionAvoidance()
 	DE::Matrix4x4f matrix = myTransform.GetMatrix();
 	std::vector<RayInfo> rayInfoList;
 
-	for(int i = 0; i < static_cast<int>(eRayDir::count); ++i)
+	for (int i = 0; i < static_cast<int>(eRayDir::count); ++i)
 	{
 		eRayDir currentDir = static_cast<eRayDir>(i);
 		DE::Vector3f direction;
 		DE::Vector3f position = myTransform.GetPosition();
 
 		// Determine the direction vector based on the current ray direction
-		switch(currentDir)
+		switch (currentDir)
 		{
 		case eRayDir::Forward:
-		direction = matrix.GetForward().GetNormalized();
-		break;
+			direction = matrix.GetForward().GetNormalized();
+			break;
 		case eRayDir::Back:
-		direction = (matrix.GetForward() * -1.0f).GetNormalized();
-		break;
+			direction = (matrix.GetForward() * -1.0f).GetNormalized();
+			break;
 		case eRayDir::Right:
-		direction = matrix.GetRight().GetNormalized();
-		break;
+			direction = matrix.GetRight().GetNormalized();
+			break;
 		case eRayDir::Left:
-		direction = (matrix.GetRight() * -1.0f).GetNormalized();
-		break;
+			direction = (matrix.GetRight() * -1.0f).GetNormalized();
+			break;
 		default:
-		continue;
+			continue;
 		}
 
 		// Check for collisions in the current direction
-		if(CollisionCheck(position, direction, 0.0f))
+		if (CollisionCheck(position, direction, 0.0f))
 		{
-			rayInfoList.push_back({currentDir, myCollisionDist, position});
+			rayInfoList.push_back({ currentDir, myCollisionDist, position });
 		}
 	}
 
@@ -231,11 +235,11 @@ std::vector<eRayDir> CompanionSteeringBehavior::DirectionAvoidance()
 	myClosestCollision = myRayLength;
 	std::vector<eRayDir> resultDirections;
 
-	if(rayInfoList.size() == 2)
+	if (rayInfoList.size() == 2)
 	{
-		for(const auto& info : rayInfoList)
+		for (const auto& info : rayInfoList)
 		{
-			if(closestDist == 0.0f || closestDist > info.closestCollision)
+			if (closestDist == 0.0f || closestDist > info.closestCollision)
 			{
 				closestDist = info.closestCollision;
 			}
@@ -245,12 +249,12 @@ std::vector<eRayDir> CompanionSteeringBehavior::DirectionAvoidance()
 		resultDirections.push_back(rayInfoList[0].direction);
 		resultDirections.push_back(rayInfoList[1].direction);
 	}
-	else if(!rayInfoList.empty())
+	else if (!rayInfoList.empty())
 	{
 		RayInfo closestRayInfo = rayInfoList[0];
-		for(const auto& info : rayInfoList)
+		for (const auto& info : rayInfoList)
 		{
-			if(closestDist == 0.0f || closestDist > info.closestCollision)
+			if (closestDist == 0.0f || closestDist > info.closestCollision)
 			{
 				closestDist = info.closestCollision;
 				closestRayInfo = info;
@@ -267,7 +271,7 @@ std::vector<eRayDir> CompanionSteeringBehavior::DirectionAvoidance()
 DE::Vector3f CompanionSteeringBehavior::Truncate(const DreamEngine::Vector3f aDirection, float aSpeed)
 {
 	float length = aDirection.Length();
-	if(length > aSpeed)
+	if (length > aSpeed)
 	{
 		return aDirection.GetNormalized() * aDirection;
 	}
@@ -281,7 +285,7 @@ DE::Vector3f CompanionSteeringBehavior::RotateToThisOverTime(DreamEngine::Vector
 	DreamEngine::Vector3f up = DreamEngine::Vector3f(0, 1, 0) + myCurrentDir * 0.011f;
 	up = up.GetNormalized();
 
-	DreamEngine::Vector3f forward = {0.f, 1.f, 0.f};
+	DreamEngine::Vector3f forward = { 0.f, 1.f, 0.f };
 	forward = (forward - forward.Dot(up) * up).GetNormalized();
 	forward *= -1.f;
 
@@ -292,12 +296,12 @@ DE::Vector3f CompanionSteeringBehavior::RotateToThisOverTime(DreamEngine::Vector
 
 	DE::Vector3f delta = rotation - aCurrentRotation;
 
-	while(delta.x > 180) delta.x -= 360;
-	while(delta.x < -180) delta.x += 360;
-	while(delta.y > 180) delta.y -= 360;
-	while(delta.y < -180) delta.y += 360;
-	while(delta.z > 180) delta.z -= 360;
-	while(delta.z < -180) delta.z += 360;
+	while (delta.x > 180) delta.x -= 360;
+	while (delta.x < -180) delta.x += 360;
+	while (delta.y > 180) delta.y -= 360;
+	while (delta.y < -180) delta.y += 360;
+	while (delta.z > 180) delta.z -= 360;
+	while (delta.z < -180) delta.z += 360;
 
 	DE::Vector3f newRotation = aCurrentRotation + delta * aRotationSpeed * aDeltaTime;
 
@@ -311,7 +315,7 @@ DE::Vector3f CompanionSteeringBehavior::RotateToThis(DreamEngine::Vector3f aPoin
 	DreamEngine::Vector3f up = DreamEngine::Vector3f(0, 1, 0) + myCurrentDir * 0.011f;
 	up = up.GetNormalized();
 
-	DreamEngine::Vector3f forward = {0.f, 1.f, 0.f};
+	DreamEngine::Vector3f forward = { 0.f, 1.f, 0.f };
 	forward = (forward - forward.Dot(up) * up).GetNormalized();
 	forward *= -1.f;
 
@@ -330,7 +334,7 @@ DE::Vector3f CompanionSteeringBehavior::RotateToVelocity()
 	DreamEngine::Vector3f up = DreamEngine::Vector3f(0, 1, 0) + myCurrentDir * 0.011f;
 	up = up.GetNormalized();
 
-	DreamEngine::Vector3f forward = {0.f, 1.f, 0.f};
+	DreamEngine::Vector3f forward = { 0.f, 1.f, 0.f };
 	forward = (forward - forward.Dot(up) * up).GetNormalized();
 	forward *= -1.f;
 
@@ -345,11 +349,11 @@ DE::Vector3f CompanionSteeringBehavior::RotateToVelocity()
 DE::Vector3f CompanionSteeringBehavior::SetOffsetToPlayer(DE::Vector3f aPlayerPos)
 {
 	DreamEngine::Vector3f offset;
-	DreamEngine::Vector3f collidiongOffset = {0.0f,0.0f,0.0f};
+	DreamEngine::Vector3f collidiongOffset = { 0.0f,0.0f,0.0f };
 
-	switch(myBilateral)
+	switch (myBilateral)
 	{
-	case Bilateral::Left: 
+	case Bilateral::Left:
 	{
 		auto cam = MainSingleton::GetInstance()->GetActiveCamera()->GetTransform().GetMatrix();
 		offset = offset + (cam.GetForward().GetNormalized() * forwardOffset);
@@ -371,16 +375,16 @@ DE::Vector3f CompanionSteeringBehavior::SetOffsetToPlayer(DE::Vector3f aPlayerPo
 	}
 	case Bilateral::Reset:
 	{
-		offset = {0.0f,0.0f,0.0f};
+		offset = { 0.0f,0.0f,0.0f };
 		break;
 	}
 	default:
-	break;
+		break;
 	}
 
 	auto test = aPlayerPos.y + myRayLength;
 
-	if(offset.y < myRayLength)
+	if (offset.y < myRayLength)
 	{
 		offset.y = myRayLength;
 	}

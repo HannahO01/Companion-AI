@@ -31,10 +31,10 @@ public:
 private:
 	bool CollisionCheck(const DreamEngine::Vector3f aPosition, const DreamEngine::Vector3f aDirection, float anAdditionalLenght);
 	std::vector<eRayDir> DirectionAvoidance();
-	
+
 	void CalculateWeights();
 	DE::Vector3f Truncate(const DreamEngine::Vector3f aDirection, float aSpeed);
-	
+
 	float TruncateToOneDecimal(float value) { return static_cast<int>(value * 10) / 10.0f; }
 
 private:
@@ -56,4 +56,3 @@ private:
 	float myArivalWeight = 0.0f;
 	float myPredictWeight = 0.0f;
 };
-
