@@ -411,13 +411,20 @@ Bilateral CompanionSteeringBehavior::ChoseClosesBilateral(DE::Vector3f aPlayerPo
 
 void CompanionSteeringBehavior::CalculateWeights()
 {
-	myFleeWeight = max(0.0f, 1.0f - (myClosestCollision / myRayLength));
-	myFleeWeight = TruncateToOneDecimal(myFleeWeight);
+	//calculate the weights here, how close are we, how close are we to a wall, how close are we to the arrival point?
+	myFleeWeight = std::max(0.0f, 1.0f - (myClosestCollision / myRayLength));
 
 	float distanceToTarget = (myTarget - myTransform.GetPosition()).Length();
-	myArivalWeight = max(0.0f, 1.0f - (distanceToTarget - minDistance) / mySlowingRadius);
-	myArivalWeight = TruncateToOneDecimal(myArivalWeight);
+	myArrivalWeight = std::max(0.0f, 1.0f - distanceToTarget / mySlowingRadius);
 
-	mySeekWeight = max(0.0f, 1.0f - myFleeWeight - myArivalWeight - myPredictWeight);
-	mySeekWeight = TruncateToOneDecimal(mySeekWeight);
+	mySeekWeight = std::max(0.0f, 1.0f - myFleeWeight - myArrivalWeight - myPredictWeight);
+
+	float totalWeight = myFleeWeight + myArrivalWeight + myPredictWeight + mySeekWeight;
+	if(totalWeight > 1.0f)
+	{
+		myFleeWeight /= totalWeight;
+		myArrivalWeight /= totalWeight;
+		myPredictWeight /= totalWeight;
+		mySeekWeight /= totalWeight;
+	}
 }
